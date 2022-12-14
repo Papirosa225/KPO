@@ -145,7 +145,7 @@ class ServerObject
                 await client.Writer.FlushAsync();
             }
         }
-    }
+    }//hththt
     // отключение всех клиентов
     protected internal void Disconnect()
     {
