@@ -73,6 +73,8 @@ class ServerObject
                 {
                     while (!board._isFinished)
                     {
+                        Random random = new Random();
+                        if (random.Next(2) == 1)     Array.Reverse(clientMaster.roomClients);
                         foreach (var player in clientMaster.roomClients)
                         {
                             board.printGame(player);
@@ -80,8 +82,6 @@ class ServerObject
                             char team = 'X';
                             if (board.gen % 2 != 0)
                                 team = '0';
-
-
                             player.Writer.WriteLine($"Ход <{player.userName}>");
                             player.Writer.Flush();
                             int x, y;
@@ -326,6 +326,7 @@ class ServerObject
         }
         private void defineWinner(ClientObject winClient,ClientObject clientMaster)
         {
+            Array.Reverse(clientMaster.roomClients);
             winClient.Writer.WriteLine($"Игрок {winClient.userName} победитель!");
             winClient.Writer.Flush();
             foreach (var loseClient in clientMaster.roomClients)
