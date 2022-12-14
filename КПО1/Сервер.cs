@@ -200,6 +200,7 @@ class ServerObject
         }
         public void IsDraw(ClientObject clientMaster)
         {
+            Array.Reverse(clientMaster.roomClients);
             foreach (var client in clientMaster.roomClients)
             {
                 client.Writer.WriteLine($"Ничья");
