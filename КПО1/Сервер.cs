@@ -3,7 +3,6 @@ using System.Net.Sockets;
 
 ServerObject server = new ServerObject();// создаем сервер
 await server.ListenAsync(); // запускаем сервер
-
 class ServerObject
 {
     TcpListener tcpListener = new TcpListener(IPAddress.Any, 8866); // сервер для прослушивания
@@ -200,6 +199,7 @@ class ServerObject
         }
         public void IsDraw(ClientObject clientMaster)
         {
+
             Array.Reverse(clientMaster.roomClients);
             foreach (var client in clientMaster.roomClients)
             {
@@ -372,6 +372,62 @@ class ServerObject
     }
 
     #endregion
+    void ChangeStatistic(ClientObject winClient,ClientObject[] clientMaster,int mode)
+    {
+        string[] AllInfo = File.ReadAllLines(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt");
+        string[,]? FormedData = new string[AllInfo.Length, 4];
+        for (int i = 0; i < AllInfo.Length; i++)
+        {
+            string[] Temporary = AllInfo[i].Split(' ').ToArray();
+            for (int j = 0; j < 4; j++) FormedData[i, j] = Temporary[j];
+        }
+        switch (mode)
+        {
+            case 1:
+                {
+
+                    foreach (var client in clientMaster)
+                    {
+                        for (int i = 0; i < AllInfo.Length; i++)
+                        {
+                            if (FormedData[i, 0] == winClient.userName)
+                            {
+                                FormedData[i, 1] += 1;
+                                FormedData[i, 2] += 1;
+                                break;
+                            }                      
+                        }
+                        for (int i = 0; i < AllInfo.Length; i++)
+                        {
+                            if (client != winClient)
+                            {
+                                FormedData[i, 1] += 1;
+                                FormedData[i, 3] += 1;
+                                break;
+                            }
+                        }
+                    }
+                    File.WriteAllText(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt", FormedData);
+                   
+                    /*foreach (var client in clientMaster)
+                    {
+                        if (winClient==client)
+                        {
+                            string dataToFile=
+                        }
+                    }*/
+
+                    break;
+                }
+            case 2:
+                {
+
+                    break;
+                }
+            default:
+                break;
+        }
+    }
     protected internal async Task BroadcastMessageAsync(string message, string id)
     {
         foreach (var client in AllClients)
@@ -527,4 +583,3 @@ class ClientObject
     }
 
 }
-//
