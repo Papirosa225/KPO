@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Dynamic;
+using System.Net;
 using System.Net.Sockets;
 
 ServerObject server = new ServerObject();// создаем сервер
@@ -10,7 +11,7 @@ class ServerObject
     List<ClientObject> GameClients = new List<ClientObject>(); // игроки в комнате
     #region Работа с сервером
 
-   
+
     protected internal void RemoveConnection(string id)
     {
         // получаем по id закрытое подключение
@@ -55,7 +56,7 @@ class ServerObject
     }
     #endregion
     #region Крестики-нолики
-    protected internal void CreateGame(string ClientId, string userName,ClientObject clientMaster)
+    protected internal void CreateGame(string ClientId, string userName, ClientObject clientMaster)
     {
 
         clientMaster.roomClients[0] = clientMaster;
@@ -66,14 +67,14 @@ class ServerObject
         Console.WriteLine("Игра создана");
         while (!board._isFinished)
         {
-            if (clientMaster.roomClients[1]!=null)
+            if (clientMaster.roomClients[1] != null)
             {
                 while (!board._isFinished)
                 {
                     while (!board._isFinished)
                     {
-                        Random random = new Random();
-                        if (random.Next(2) == 1)     Array.Reverse(clientMaster.roomClients);
+                        board.randomValue = board.random.Next(1, 2);
+                        if (board.randomValue == 1) Array.Reverse(clientMaster.roomClients);
                         foreach (var player in clientMaster.roomClients)
                         {
                             board.printGame(player);
@@ -91,7 +92,7 @@ class ServerObject
                                 y = Convert.ToInt32(player.Reader.ReadLine()) - 1;
                                 Console.WriteLine(y);
                             }
-                            while (!board.markCell(x, y, team, player,clientMaster));
+                            while (!board.markCell(x, y, team, player, clientMaster));
                             board.gen++;
                             Console.WriteLine("Новый ход");
                             if (board._isFinished) break;
@@ -103,13 +104,13 @@ class ServerObject
             }
         }
 
-
     }
-    protected internal void JoinGame(int GameId,ClientObject client)
+
+    protected internal void JoinGame(int GameId, ClientObject client)
     {
         foreach (var clientsMaster in AllClients)
         {
-            if (clientsMaster.GameID==GameId && clientsMaster.roomCreate)
+            if (clientsMaster.GameID == GameId && clientsMaster.roomCreate)
             {
                 clientsMaster.roomClients[1] = client;
                 clientsMaster.roomClients[0].Writer.WriteLine($"Игрок {client.userName} подключился к игре");
@@ -118,36 +119,14 @@ class ServerObject
                 client.Writer.Flush();
                 while (true)
                 {
-                    if (clientsMaster.roomClients[1]==null)
+                    if (clientsMaster.roomClients[1] == null)
                     {
-                        break;
+                        return;
                     }
                 }
-                break;
             }
         }
-            client.Writer.WriteLine("Неправильный код комнаты");
-
-        /*  foreach (var client in clients)
-          {
-              if (Id == client.Id)
-              {
-                  GameClients.Add(client);
-                  GameClients.First().Writer.WriteLine($"Игрок {userName} подключился к игре");
-                  GameClients.First().Writer.Flush();
-                  client.Writer.WriteLine($"Вы подключились к игроку: {GameClients.First().userName}");
-                  client.Writer.Flush();
-                  while (true)
-                  {
-                      if (GameClients.Count() != 2)
-                      {
-                          break;
-                      }
-                  }
-
-              }
-          }*/
-
+        client.Writer.WriteLine("Неправильный код комнаты");
     }
     // трансляция сообщения подключенным клиентам
     class Board
@@ -159,6 +138,8 @@ class ServerObject
         {
             get { return _isFinished; }
         }
+        public Random random = new Random();
+        public int randomValue;
         public void RefreshBoard()
         {
             for (int i = 0; i < 3; i++)
@@ -170,9 +151,9 @@ class ServerObject
             }
             gen = -1;
         }
-        public bool markCell(int x, int y, char team,ClientObject client,ClientObject clientMaster)
+        public bool markCell(int x, int y, char team, ClientObject client, ClientObject clientMaster)
         {
-            if (x > 3 || x < 0 || y > 3 || y < 0)
+            if (x > 3 || y>3 || x<0 || y<0)
             {
                 client.Writer.WriteLine("Вне диапазона доступных позиций");
                 client.Writer.Flush();
@@ -194,18 +175,18 @@ class ServerObject
             }
             cells[x, y] = team;
             printGame(client);
-            checkWinner(team, client,clientMaster);
+            checkWinner(team, client, clientMaster);
             return true;
         }
         public void IsDraw(ClientObject clientMaster)
         {
 
-            Array.Reverse(clientMaster.roomClients);
+            ChangeStatistic(clientMaster.roomClients);
             foreach (var client in clientMaster.roomClients)
             {
                 client.Writer.WriteLine($"Ничья");
                 client.Writer.Flush();
-                if (client!=clientMaster)
+                if (client != clientMaster)
                 {
                     client.Writer.WriteLine("Введите 1 для реванша, 0 для отмены");
                     client.Writer.Flush();
@@ -219,7 +200,7 @@ class ServerObject
                                     clientMaster.Writer.WriteLine($"{client.userName} согласился на реванш");
                                     client.Writer.Flush();
                                     RefreshBoard();
-                                    _isFinished=false;
+                                    _isFinished = false;
                                     return;
                                 }
                             case "0":
@@ -227,7 +208,7 @@ class ServerObject
                                     clientMaster.Writer.WriteLine($"{client.userName} отказался от реванша");
                                     client.Writer.Flush();
                                     Array.Clear(clientMaster.roomClients);
-                                    _isFinished =true;
+                                    _isFinished = true;
                                     return;
                                 }
                             default:
@@ -239,7 +220,8 @@ class ServerObject
                 }
             }
         }
-        private void checkWinner(char team, ClientObject client,ClientObject clientMaster)
+
+        private void checkWinner(char team, ClientObject client, ClientObject clientMaster)
         {
 
             // * _ _
@@ -253,7 +235,7 @@ class ServerObject
             }
             if (trigger)
             {
-                defineWinner(client,clientMaster);
+                defineWinner(client, clientMaster);
                 return;
             }
             // _ _ *
@@ -325,14 +307,18 @@ class ServerObject
             client.Writer.WriteLine("======");
             client.Writer.Flush();
         }
-        private void defineWinner(ClientObject winClient,ClientObject clientMaster)
+        private void defineWinner(ClientObject winClient, ClientObject clientMaster)
         {
-            Array.Reverse(clientMaster.roomClients);
+            if (randomValue == 1) Array.Reverse(clientMaster.roomClients);
+
+
             winClient.Writer.WriteLine($"Игрок {winClient.userName} победитель!");
             winClient.Writer.Flush();
+            ChangeStatistic(clientMaster.roomClients, winClient);
+
             foreach (var loseClient in clientMaster.roomClients)
-            {                
-                if(winClient!=loseClient)
+            {
+                if (winClient != loseClient)
                 {
                     loseClient.Writer.WriteLine($"Игрок {winClient.userName} победитель!");
                     loseClient.Writer.Flush();
@@ -365,83 +351,101 @@ class ServerObject
                         }
                     }
                 }
-                
+
             }
-           
+
         }
-    }
-
-    #endregion
-    void ChangeStatistic(ClientObject winClient,ClientObject[] clientMaster,int mode)
-    {
-        string[] AllInfo = File.ReadAllLines(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt");
-        string[,]? FormedData = new string[AllInfo.Length, 4];
-        for (int i = 0; i < AllInfo.Length; i++)
+        void ChangeStatistic(ClientObject[] clientMaster, ClientObject winClient)
         {
-            string[] Temporary = AllInfo[i].Split(' ').ToArray();
-            for (int j = 0; j < 4; j++) FormedData[i, j] = Temporary[j];
-        }
-        switch (mode)
-        {
-            case 1:
-                {
-
-                    foreach (var client in clientMaster)
-                    {
-                        for (int i = 0; i < AllInfo.Length; i++)
-                        {
-                            if (FormedData[i, 0] == winClient.userName)
-                            {
-                                FormedData[i, 1] += 1;
-                                FormedData[i, 2] += 1;
-                                break;
-                            }                      
-                        }
-                        for (int i = 0; i < AllInfo.Length; i++)
-                        {
-                            if (client != winClient)
-                            {
-                                FormedData[i, 1] += 1;
-                                FormedData[i, 3] += 1;
-                                break;
-                            }
-                        }
-                    }
-                    File.WriteAllText(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt", FormedData);
-                   
-                    /*foreach (var client in clientMaster)
-                    {
-                        if (winClient==client)
-                        {
-                            string dataToFile=
-                        }
-                    }*/
-
-                    break;
-                }
-            case 2:
-                {
-
-                    break;
-                }
-            default:
-                break;
-        }
-    }
-    protected internal async Task BroadcastMessageAsync(string message, string id)
-    {
-        foreach (var client in AllClients)
-        {
-            if (client.Id != id) // если id клиента не равно id отправителя
+            string[] AllInfo = File.ReadAllLines(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt");
+            string[,]? FormedData = new string[AllInfo.Length, 5];
+            for (int i = 0; i < AllInfo.Length; i++)
             {
-                await client.Writer.WriteLineAsync(message); //передача данных
-                await client.Writer.FlushAsync();
+                string[] Temporary = AllInfo[i].Split(' ').ToArray();
+                for (int j = 0; j < 5; j++) FormedData[i, j] = Temporary[j];
+            }
+
+
+            for (int i = 0; i < AllInfo.Length; i++)
+            {
+                if (FormedData[i, 0] == winClient.userName)
+                {
+                    int temp = Convert.ToInt32(FormedData[i, 1]);
+                    temp += 1;
+                    FormedData[i, 1] = temp.ToString();
+                    temp = 0;
+                    temp = Convert.ToInt32(FormedData[i, 2]);
+                    temp += 1;
+                    FormedData[i, 2] = temp.ToString();
+                    break;
+                }
+            }
+            foreach (var client in clientMaster)
+            {
+                for (int i = 0; i < AllInfo.Length; i++)
+                {
+                    if (FormedData[i, 0] == client.userName && winClient != client)
+                    {
+                        int temp = Convert.ToInt32(FormedData[i, 1]);
+                        temp += 1;
+
+                        FormedData[i, 1] = temp.ToString();
+                        temp = 0;
+                        temp = Convert.ToInt32(FormedData[i, 3]);
+                        temp += 1;
+                        FormedData[i, 3] = temp.ToString();
+                        break;
+                    }
+                }
+            }
+               
+            
+            string dataToFile1 = FormedData[0, 0] + ' ' + FormedData[0, 1] + ' ' + FormedData[0, 2] + ' ' + FormedData[0, 3] + ' ' + FormedData[0, 4]+'\n';
+            File.WriteAllText(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt",dataToFile1);
+            for (int i = 1; i < AllInfo.Length; i++)
+            {
+                string dataToFile = FormedData[i, 0] + ' ' + FormedData[i, 1] + ' ' + FormedData[i, 2] + ' ' + FormedData[i, 3] + ' ' + FormedData[i, 4] + '\n';
+                File.AppendAllText(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt", dataToFile);
             }
         }
+
+        void ChangeStatistic(ClientObject[] clientMaster)
+        {
+            string[] AllInfo = File.ReadAllLines(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt");
+            string[,]? FormedData = new string[AllInfo.Length, 5];
+            for (int i = 0; i < AllInfo.Length; i++)
+            {
+                string[] Temporary = AllInfo[i].Split(' ').ToArray();
+                for (int j = 0; j < 5; j++) FormedData[i, j] = Temporary[j];
+            }
+            foreach (var client in clientMaster)
+            {
+                for (int i = 0; i < AllInfo.Length; i++)
+                {
+                    if (FormedData[i, 0] == client.userName)
+                    {
+                        int temp = Convert.ToInt32(FormedData[i, 1]);
+                        temp += 1;
+                        FormedData[i, 0] = temp.ToString();
+                        FormedData[i, 4] += 1;
+                        temp = Convert.ToInt32(FormedData[i, 4]);
+                        FormedData[i, 4] = temp.ToString();
+                    }
+                }
+            }
+            string dataToFile1= FormedData[0, 0]+' '+ FormedData[0, 1] + ' ' + FormedData[0, 2] +' ' + FormedData[0, 3] + ' ' + FormedData[0, 4]+'\n';
+            File.WriteAllText(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt",dataToFile1);
+            for (int i = 1; i < AllInfo.Length; i++)
+            {
+                string dataToFile = FormedData[i, 0] + ' ' + FormedData[i, 1] + ' ' + FormedData[i, 2] + ' ' + FormedData[i, 3] + ' ' + FormedData[i, 4] + '\n';
+                File.AppendAllText(@"C:\Users\dima_\source\repos\КПО1\КПО1\Statistic.txt", dataToFile);
+            }
+        }
+
+        #endregion
+
+        // отключение всех клиентов
     }
-    // отключение всех клиентов
-
-
 }
 class ClientObject
 {
