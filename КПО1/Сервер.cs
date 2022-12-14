@@ -7,15 +7,26 @@ await server.ListenAsync(); // запускаем сервер
 class ServerObject
 {
     TcpListener tcpListener = new TcpListener(IPAddress.Any, 8866); // сервер для прослушивания
-    List<ClientObject> clients = new List<ClientObject>(); // все подключения
+    List<ClientObject> AllClients = new List<ClientObject>(); // все подключения
     List<ClientObject> GameClients = new List<ClientObject>(); // игроки в комнате
+    #region Работа с сервером
+
+   
     protected internal void RemoveConnection(string id)
     {
         // получаем по id закрытое подключение
-        ClientObject? client = clients.FirstOrDefault(c => c.Id == id);
+        ClientObject? client = AllClients.FirstOrDefault(c => c.Id == id);
         // и удаляем его из списка подключений
-        if (client != null) clients.Remove(client);
+        if (client != null) AllClients.Remove(client);
         client?.Close();
+    }
+    protected internal void Disconnect()
+    {
+        foreach (var client in AllClients)
+        {
+            client.Close(); //отключение клиента
+        }
+        tcpListener.Stop(); //остановка сервера
     }
     // прослушивание входящих подключений
     protected internal async Task ListenAsync()
@@ -30,7 +41,7 @@ class ServerObject
                 TcpClient tcpClient = await tcpListener.AcceptTcpClientAsync();
 
                 ClientObject clientObject = new ClientObject(tcpClient, this);
-                clients.Add(clientObject);
+                AllClients.Add(clientObject);
                 Task.Run(clientObject.ProcessAsync);
             }
         }
@@ -43,52 +54,48 @@ class ServerObject
             Disconnect();
         }
     }
-    protected internal void CreateGame(string ClientId, string userName)
+    #endregion
+    #region Крестики-нолики
+    protected internal void CreateGame(string ClientId, string userName,ClientObject clientMaster)
     {
-        foreach (var GameClient in clients)
-        {
-            if (GameClient.Id == ClientId)
-            {
-                GameClients.Add(GameClient);
-                GameClients.First().Writer.Write("Ожидайте игроков\n");
-                GameClient.Writer.Flush();
-            }
-        }
+
+        clientMaster.roomClients[0] = clientMaster;
+        clientMaster.roomClients[0].Writer.Write("Ожидайте игроков\n");
+        clientMaster.Writer.Flush();
         Board board = new Board();
+        clientMaster.roomCreate = true;
         Console.WriteLine("Игра создана");
         while (!board._isFinished)
         {
-            if (GameClients.Count() == 2)
+            if (clientMaster.roomClients[1]!=null)
             {
                 while (!board._isFinished)
                 {
-                    
-
                     while (!board._isFinished)
                     {
-                        foreach (var teams in GameClients)
+                        foreach (var player in clientMaster.roomClients)
                         {
-                            board.printGame(teams);
+                            board.printGame(player);
 
                             char team = 'X';
                             if (board.gen % 2 != 0)
                                 team = '0';
 
 
-                                teams.Writer.WriteLine($"Ход <{teams.userName}>");
-                                teams.Writer.Flush();
-                                int x, y;
-                                do
-                                {
-                                    x = Convert.ToInt32(teams.Reader.ReadLine()) - 1;
-                                    Console.WriteLine(x);
-                                    y = Convert.ToInt32(teams.Reader.ReadLine()) - 1;
-                                    Console.WriteLine(y);
-                                }
-                                while (!board.markCell(x, y, team, teams,GameClients));
-                                board.gen++;
-                                Console.WriteLine("Новый ход");
-                            if (board._isFinished)   break;
+                            player.Writer.WriteLine($"Ход <{player.userName}>");
+                            player.Writer.Flush();
+                            int x, y;
+                            do
+                            {
+                                x = Convert.ToInt32(player.Reader.ReadLine()) - 1;
+                                Console.WriteLine(x);
+                                y = Convert.ToInt32(player.Reader.ReadLine()) - 1;
+                                Console.WriteLine(y);
+                            }
+                            while (!board.markCell(x, y, team, player,clientMaster));
+                            board.gen++;
+                            Console.WriteLine("Новый ход");
+                            if (board._isFinished) break;
                         }
 
                     }
@@ -99,67 +106,56 @@ class ServerObject
 
 
     }
-    protected internal void JoinGame(string Id, string userName,int GameId)
+    protected internal void JoinGame(int GameId,ClientObject client)
     {
-        if (GameClients.First().GameID != GameId)
+        foreach (var clientsMaster in AllClients)
         {
-            foreach(var client in clients)
+            if (clientsMaster.GameID==GameId && clientsMaster.roomCreate)
             {
-                if (Id==client.Id)
-                {
-                    client.Writer.WriteLine("Неправильный код комнаты");
-                }
-            }
-            return;
-        }
-                    
-        foreach (var client in clients)
-        {
-            if (Id == client.Id)
-            {
-                GameClients.Add(client);
-                GameClients.First().Writer.WriteLine($"Игрок {userName} подключился к игре");
-                GameClients.First().Writer.Flush();
-                client.Writer.WriteLine($"Вы подключились к игроку: {GameClients.First().userName}");
+                clientsMaster.roomClients[1] = client;
+                clientsMaster.roomClients[0].Writer.WriteLine($"Игрок {client.userName} подключился к игре");
+                clientsMaster.roomClients[0].Writer.Flush();
+                client.Writer.WriteLine($"Вы подключились к игроку: {clientsMaster.roomClients[0].userName}");
                 client.Writer.Flush();
                 while (true)
                 {
-                    if (GameClients.Count() != 2)
+                    if (clientsMaster.roomClients[1]==null)
                     {
                         break;
                     }
                 }
-                
+                break;
             }
         }
-        
+            client.Writer.WriteLine("Неправильный код комнаты");
+
+        /*  foreach (var client in clients)
+          {
+              if (Id == client.Id)
+              {
+                  GameClients.Add(client);
+                  GameClients.First().Writer.WriteLine($"Игрок {userName} подключился к игре");
+                  GameClients.First().Writer.Flush();
+                  client.Writer.WriteLine($"Вы подключились к игроку: {GameClients.First().userName}");
+                  client.Writer.Flush();
+                  while (true)
+                  {
+                      if (GameClients.Count() != 2)
+                      {
+                          break;
+                      }
+                  }
+
+              }
+          }*/
+
     }
     // трансляция сообщения подключенным клиентам
-    protected internal async Task BroadcastMessageAsync(string message, string id)
-    {
-        foreach (var client in clients)
-        {
-            if (client.Id != id) // если id клиента не равно id отправителя
-            {
-                await client.Writer.WriteLineAsync(message); //передача данных
-                await client.Writer.FlushAsync();
-            }
-        }
-    }
-    // отключение всех клиентов
-    protected internal void Disconnect()
-    {
-        foreach (var client in clients)
-        {
-            client.Close(); //отключение клиента
-        }
-        tcpListener.Stop(); //остановка сервера
-    }
     class Board
     {
         private char[,] cells = new char[3, 3] { { ' ', ' ', ' ' }, { ' ', ' ', ' ' }, { ' ', ' ', ' ' } };
         public int gen { get; set; } = 0;
-        public bool _isFinished{get;set;}=false;
+        public bool _isFinished { get; set; } = false;
         public bool isFinished
         {
             get { return _isFinished; }
@@ -175,7 +171,7 @@ class ServerObject
             }
             gen = -1;
         }
-        public bool markCell(int x, int y, char team, ClientObject client, List<ClientObject> gameClients)
+        public bool markCell(int x, int y, char team,ClientObject client,ClientObject clientMaster)
         {
             if (x > 3 || x < 0 || y > 3 || y < 0)
             {
@@ -199,39 +195,50 @@ class ServerObject
             }
             cells[x, y] = team;
             printGame(client);
-            checkWinner(team, client,gameClients);
+            checkWinner(team, client,clientMaster);
             return true;
         }
-        public void IsDraw(List<ClientObject> gameClients)
+        public void IsDraw(ClientObject clientMaster)
         {
-            foreach (var client in gameClients)
+            foreach (var client in clientMaster.roomClients)
             {
                 client.Writer.WriteLine($"Ничья");
                 client.Writer.Flush();
+                if (client!=clientMaster)
+                {
+                    client.Writer.WriteLine("Введите 1 для реванша, 0 для отмены");
+                    client.Writer.Flush();
+
+                    while (true)
+                    {
+                        switch (client.Reader.ReadLine())
+                        {
+                            case "1":
+                                {
+                                    clientMaster.Writer.WriteLine($"{client.userName} согласился на реванш");
+                                    client.Writer.Flush();
+                                    RefreshBoard();
+                                    _isFinished=false;
+                                    return;
+                                }
+                            case "0":
+                                {
+                                    clientMaster.Writer.WriteLine($"{client.userName} отказался от реванша");
+                                    client.Writer.Flush();
+                                    Array.Clear(clientMaster.roomClients);
+                                    _isFinished =true;
+                                    return;
+                                }
+                            default:
+                                client.Writer.WriteLine("Неправильное число");
+                                client.Writer.Flush();
+                                break;
+                        }
+                    }
+                }
             }
-            gameClients.First().Writer.WriteLine("Введите 1 для реванша, 0 для отмены");
-            gameClients.First().Writer.Flush();
-            while (true)
-                {
-                if (gameClients.First().Reader.ReadLine() == "1")
-                {
-                    gameClients.First().Writer.WriteLine("Work");
-                    gameClients.First().Writer.Flush();
-                    RefreshBoard();
-                    _isFinished = false;
-                    break;
-                }
-                if (gameClients.First().Reader.ReadLine() == "0")
-                {
-                    _isFinished = true;
-                    gameClients.First().Writer.WriteLine("Work");
-                    gameClients.First().Writer.Flush();
-                    gameClients.Clear();
-                    break;
-                }
-            }           
         }
-        private void checkWinner(char team, ClientObject client, List<ClientObject> gameClients)
+        private void checkWinner(char team, ClientObject client,ClientObject clientMaster)
         {
 
             // * _ _
@@ -245,7 +252,7 @@ class ServerObject
             }
             if (trigger)
             {
-                defineWinner(gameClients,client);
+                defineWinner(client,clientMaster);
                 return;
             }
             // _ _ *
@@ -259,7 +266,7 @@ class ServerObject
             }
             if (trigger)
             {
-                defineWinner(gameClients, client);
+                defineWinner(client, clientMaster);
                 return;
             }
             // _ * _
@@ -277,7 +284,7 @@ class ServerObject
                 }
                 if (triggerJ)
                 {
-                    defineWinner(gameClients, client);
+                    defineWinner(client, clientMaster);
                     return;
                 }
             }
@@ -294,57 +301,89 @@ class ServerObject
                 }
                 if (triggerI)
                 {
-                    defineWinner(gameClients, client);
+                    defineWinner(client, clientMaster);
                     return;
                 }
             }
             // * * *
             // * * *
             // * * *
-            if (gen == 8) 
+            if (gen == 8)
             {
-                IsDraw(gameClients);                   
+                IsDraw(clientMaster);
                 return;
             }
-            
+
         }
         public void printGame(ClientObject client)
         {
-            client.Writer.WriteLine("======");
+            client.Writer.WriteLine("\n\n======");
             client.Writer.Flush();
             client.Writer.WriteLine($"  {cells[0, 0]}{cells[0, 1]}{cells[0, 2]}\n  {cells[1, 0]}{cells[1, 1]}{cells[1, 2]}\n  {cells[2, 0]}{cells[2, 1]}{cells[2, 2]}");
             client.Writer.Flush();
             client.Writer.WriteLine("======");
             client.Writer.Flush();
         }
-        private void defineWinner(List<ClientObject> gameClients,ClientObject winClient)
+        private void defineWinner(ClientObject winClient,ClientObject clientMaster)
         {
-            foreach (var client in gameClients)
+            winClient.Writer.WriteLine($"Игрок {winClient.userName} победитель!");
+            winClient.Writer.Flush();
+            foreach (var loseClient in clientMaster.roomClients)
             {                
-                client.Writer.WriteLine($"Игрок {winClient.userName} победитель!");
-                client.Writer.Flush();
-                _isFinished=true;
-                if (client!=winClient) 
-                { 
-                    client.Writer.WriteLine("Введите 1 для реванша, 0 для отмены");
-                    client.Writer.Flush();
-                }
-                while (true)
+                if(winClient!=loseClient)
                 {
-                    if (client.Reader.ReadLine() == "1") { _isFinished = false;
-
-                        RefreshBoard();
-                        break;
-                    }
-                    if (client.Reader.ReadLine() == "0")
+                    loseClient.Writer.WriteLine($"Игрок {winClient.userName} победитель!");
+                    loseClient.Writer.Flush();
+                    _isFinished = true;
+                    loseClient.Writer.WriteLine("Введите 1 для реванша, 0 для отмены");
+                    loseClient.Writer.Flush();
+                    while (true)
                     {
-                        gameClients.Remove(winClient);
-                        break;
+                        switch (loseClient.Reader.ReadLine())
+                        {
+                            case "1":
+                                {
+                                    winClient.Writer.WriteLine($"{loseClient.userName} согласился на реванш");
+                                    winClient.Writer.Flush();
+                                    _isFinished = false;
+                                    RefreshBoard();
+                                    return;
+                                }
+                            case "0":
+                                {
+                                    winClient.Writer.WriteLine($"{loseClient.userName} отказался от реванша");
+                                    winClient.Writer.Flush();
+                                    Array.Clear(clientMaster.roomClients);
+                                    return;
+                                }
+                            default:
+                                loseClient.Writer.WriteLine("Неправильное число");
+                                loseClient.Writer.Flush();
+                                break;
+                        }
                     }
-                }                
-            }            
+                }
+                
+            }
+           
         }
     }
+
+    #endregion
+    protected internal async Task BroadcastMessageAsync(string message, string id)
+    {
+        foreach (var client in AllClients)
+        {
+            if (client.Id != id) // если id клиента не равно id отправителя
+            {
+                await client.Writer.WriteLineAsync(message); //передача данных
+                await client.Writer.FlushAsync();
+            }
+        }
+    }
+    // отключение всех клиентов
+
+
 }
 class ClientObject
 {
@@ -352,6 +391,8 @@ class ClientObject
     protected internal StreamWriter Writer { get; }
     protected internal StreamReader Reader { get; }
     public string? userName { get; set; }
+    public ClientObject[] roomClients = new ClientObject[2];
+    public  bool roomCreate = false;
     public int GameID { get; set; }
     TcpClient client;
     ServerObject server; // объект сервера
@@ -386,14 +427,14 @@ class ClientObject
                             GameID = random.Next(1000);
                             Writer.WriteLine($"Id вашей комнаты: {GameID}");
                             Writer.Flush();
-                            server.CreateGame(Id, userName);
+                            server.CreateGame(Id, userName,this);
                             break;
                         }
                     case "2": //Подключение к комнате
                         {
                             Writer.WriteLine("Введите Id нужной вам комнаты");
                             Writer.Flush();
-                            server.JoinGame(Id, userName,Convert.ToInt32(Reader.ReadLine()));
+                            server.JoinGame(Convert.ToInt32(Reader.ReadLine()),this);
                             break;
                         }
                     default:
